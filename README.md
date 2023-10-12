@@ -6,7 +6,12 @@ Stereo VO/VSLAM simulation I created because I wanted to build this from scratch
 ### TODO: Frame-to-Frame Estimator
 
 - [ ] Figure out why some iterations have infinite cost
-- [ ] Add a proper abstraction class 
+- [ ] Create a stereo VO class to abstract usage
+
+
+### TODO: Bundle Adjuster
+
+- [ ] Verify correctness in simulation
 
 ![Stereo VO Simulation](assets/vo_sim.png)
 
