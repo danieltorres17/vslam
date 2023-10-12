@@ -3,4 +3,4 @@ Stereo VO/SLAM simulation
 
 ![Stereo VO Simulation](assets/vo_sim.png)
 
-![](assets/vio_sim.gif)
+![](https://github.com/danieltorres17/vslam/blob/main/assets/vo_sim.gif)
