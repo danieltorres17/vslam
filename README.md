@@ -7,7 +7,7 @@ Stereo VO/VSLAM simulation I created because I wanted to build this from scratch
 
 - [ ] Figure out why some iterations have infinite cost
 - [ ] Create a stereo VO class to abstract usage
-
+- [ ] Clean up unit test and utilities
 
 ### TODO: Bundle Adjuster
 
