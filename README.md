@@ -5,6 +5,7 @@ Stereo VO/VSLAM simulation I created because I wanted to build this from scratch
 
 ### TODO: Frame-to-Frame Estimator
 
+- [X] Create this using Ceres solver
 - [ ] Figure out why some iterations have infinite cost
 - [ ] Create a stereo VO class to abstract usage
 - [ ] Clean up unit test and utilities
