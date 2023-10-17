@@ -3,13 +3,10 @@
 
 namespace vo {
 
-ReprojectionError::ReprojectionError(const int width, const int height, const gtsam::Point2& uv_left,
-                                     const gtsam::Point2& uv_right, const gtsam::Cal3_S2& K,
-                                     const gtsam::Point3& pt3d_caml, const gtsam::Point3& pt3d_camr,
-                                     const gtsam::Pose3& pose_caml_camr)
-  : width_(width)
-  , height_(height)
-  , uv_left_(uv_left)
+ReprojectionError::ReprojectionError(const gtsam::Point2& uv_left, const gtsam::Point2& uv_right,
+                                     const gtsam::Cal3_S2& K, const gtsam::Point3& pt3d_caml,
+                                     const gtsam::Point3& pt3d_camr, const gtsam::Pose3& pose_caml_camr)
+  : uv_left_(uv_left)
   , uv_right_(uv_right)
   , K_(K)
   , pt3d_caml_(pt3d_caml)
@@ -32,8 +29,6 @@ bool ReprojectionError::operator()(const double* const pose_a_b_arr, double* res
       gtsam::PinholeCamera<gtsam::Cal3_S2>(pose_a_b_camr, K_).projectSafe(pt3d_camr_);
 
   if (!uvl_safe || !uvr_safe) {
-    std::cout << "uv_caml: " << uv_caml.x() << ", " << uv_caml.y() << "\n";
-    std::cout << "uv_camr: " << uv_camr.x() << ", " << uv_camr.y() << "\n";
     return false;
   }
 
@@ -46,12 +41,11 @@ bool ReprojectionError::operator()(const double* const pose_a_b_arr, double* res
   return true;
 }
 
-ceres::CostFunction* ReprojectionError::Create(const int width, const int height,
-                                               const gtsam::Point2& uv_left, const gtsam::Point2& uv_right,
+ceres::CostFunction* ReprojectionError::Create(const gtsam::Point2& uv_left, const gtsam::Point2& uv_right,
                                                const gtsam::Point3& pt3d_caml, const gtsam::Point3& pt3d_camr,
                                                const gtsam::Cal3_S2& K, const gtsam::Pose3& pose_caml_camr) {
   return new ceres::NumericDiffCostFunction<ReprojectionError, ceres::CENTRAL, 4, 6>(
-      new ReprojectionError(width, height, uv_left, uv_right, K, pt3d_caml, pt3d_camr, pose_caml_camr));
+      new ReprojectionError(uv_left, uv_right, K, pt3d_caml, pt3d_camr, pose_caml_camr));
 }
 
 bool ReprojectionError::UvInImage(const int width, const int height, const gtsam::Point2& uv) {
@@ -76,7 +70,7 @@ bool MotionEstimator::solve(const std::vector<Measurement>& measurements,
                             const gtsam::Pose3& pose_caml_camr, gtsam::Pose3& pose_a_b,
                             gtsam::Matrix66& cov_mat) const {
   // Check the number of given 3D points.
-  assert(pts3d_caml.size() == pts3d_camr.size() && "Number of 3D points must be equal.");
+  assert(pts3d_caml.size() == pts3d_camr.size() && "Number of left and right 3D points must be equal.");
 
   // Create initial pose estimate array.
   const gtsam::Point3& xyz = pose_a_b.translation();
@@ -86,21 +80,28 @@ bool MotionEstimator::solve(const std::vector<Measurement>& measurements,
   // Create residuals and solve problem.
   ceres::Problem problem;
   for (const auto& meas : measurements) {
-    auto cost_functor =
-        ReprojectionError::Create(width_, height_, meas.uv_left, meas.uv_right, pts3d_caml.at(meas.pt3d_idx),
-                                  pts3d_camr.at(meas.pt3d_idx), K, pose_caml_camr);
+    // Filter out measurements outside image.
+    if (!ReprojectionError::UvInImage(width_, height_, meas.uv_left) ||
+        !ReprojectionError::UvInImage(width_, height_, meas.uv_right)) {
+      continue;
+    }
+    auto cost_functor = ReprojectionError::Create(meas.uv_left, meas.uv_right, pts3d_caml.at(meas.pt3d_idx),
+                                                  pts3d_camr.at(meas.pt3d_idx), K, pose_caml_camr);
     ceres::LossFunction* loss_function = new ceres::CauchyLoss(loss_scaling_param_);
     problem.AddResidualBlock(cost_functor, loss_function, pose_a_b_arr);
   }
 
-  // Solve problem and update pose argument.
+  // Solve problem.
   ceres::Solver::Summary summary;
   ceres::Solve(options_, &problem, &summary);
+
+  // Update pose.
   gtsam::Rot3 R = gtsam::Rot3::RzRyRx(pose_a_b_arr[3], pose_a_b_arr[4], pose_a_b_arr[5]);
   gtsam::Point3 t = {pose_a_b_arr[0], pose_a_b_arr[1], pose_a_b_arr[2]};
   pose_a_b = gtsam::Pose3(R, t);
 
-  // Check if the problem successfully converged.
+  // Check if the problem successfully converged. In case of failure, set covariance matrix to NaNs.
+  cov_mat.setConstant(std::numeric_limits<double>::quiet_NaN());
   if (summary.termination_type == ceres::FAILURE) {
     return false;
   }
@@ -111,13 +112,10 @@ bool MotionEstimator::solve(const std::vector<Measurement>& measurements,
   std::vector<std::pair<const double*, const double*>> covariance_blocks;
   covariance_blocks.push_back(std::make_pair(pose_a_b_arr, pose_a_b_arr));
 
-  if (!cov.Compute(covariance_blocks, &problem)) {
-    cov_mat.setConstant(std::numeric_limits<double>::quiet_NaN());
-    return false;
+  if (cov.Compute(covariance_blocks, &problem)) {
+    // Copy covariance matrix into output argument.
+    cov.GetCovarianceBlock(pose_a_b_arr, pose_a_b_arr, cov_mat.data());
   }
-
-  // Copy covariance matrix into output argument.
-  cov.GetCovarianceBlock(pose_a_b_arr, pose_a_b_arr, cov_mat.data());
 
   return true;
 }

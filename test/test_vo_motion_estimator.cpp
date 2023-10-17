@@ -76,6 +76,7 @@ TEST_F(VoFixture, CreateEnvironment) {
   // Project points into left and right cameras.
   std::vector<gtsam::Point2> uvs_caml;
   std::vector<gtsam::Point2> uvs_camr;
+  int num_out_px = 0;
   for (const auto& pt3d_map : sampled_pts3d_map_gt) {
     // Safe project points into left and right cameras.
     const auto& [uv_caml, uvl_safe] = caml0.projectSafe(pt3d_map);
@@ -83,9 +84,16 @@ TEST_F(VoFixture, CreateEnvironment) {
     if (!uvl_safe || !uvr_safe) {  // Move to next point if behind camera.
       continue;
     }
+    // Filter out projections if outside image.
+    if (!vo::ReprojectionError::UvInImage(width, height, uv_caml) ||
+        !vo::ReprojectionError::UvInImage(width, height, uv_camr)) {
+      num_out_px++;
+      continue;
+    }
     uvs_caml.push_back(uv_caml);
     uvs_camr.push_back(uv_camr);
   }
+  std::cout << "Number of points outside image: " << num_out_px << std::endl;
 
   // Plot and save projection images.
   const cv::Mat image_caml0 = PlotProjections(uvs_caml, width, height);
@@ -93,7 +101,7 @@ TEST_F(VoFixture, CreateEnvironment) {
   SaveImage(image_caml0, "image_caml0.png");
   SaveImage(image_camr0, "image_camr0.png");
 
-  // Create and visualize environment.
+  // Create and visualize environment. (Disabled because the PCL visualization crashes out. Need to debug.)
   // VisualizeSetup(pose_world_map, sampled_pts3d_map_gt, frames_map_gt);
 }
 
@@ -167,7 +175,7 @@ TEST_F(VoFixture, StereoVO) {
 
     // Generate noisy initial guess.
     const double xyz_std_dev = 0.02;
-    const double rot_std_dev = 0.05;
+    const double rot_std_dev = 0.1;
     gtsam::Pose3 odom_est = ApplyNoiseToPose(gtsam::Pose3::Identity(), xyz_std_dev, rot_std_dev);
     std::cout << "Initial guess: " << PoseVectorFmt(PoseToVector(odom_est)) << std::endl;
     gtsam::Matrix66 odom_est_cov = gtsam::I_6x6;
@@ -178,6 +186,7 @@ TEST_F(VoFixture, StereoVO) {
                                          pose_caml_camr, odom_est, odom_est_cov);
     EXPECT_TRUE(success);
     std::cout << "Optimized guess: " << PoseVectorFmt(PoseToVector(odom_est)) << "\n\n";
+    EXPECT_FALSE(odom_est_cov.hasNaN());
 
     // Store estimated odometry.
     odom_vec.push_back(odom_est);
@@ -189,8 +198,8 @@ TEST_F(VoFixture, StereoVO) {
     const gtsam::Vector3& delta_xyz = odom_est_gt_delta.translation();
     const gtsam::Vector3 delta_rpy = odom_est_gt_delta.rotation().rpy();
 
-    EXPECT_LT(delta_xyz.norm(), 1e-2);
-    EXPECT_LT(delta_rpy.norm(), 1e-2);
+    EXPECT_LT(delta_xyz.norm(), 1e-3);
+    EXPECT_LT(delta_rpy.norm(), 1e-3);
   }
 }
 
