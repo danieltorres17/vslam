@@ -1,4 +1,5 @@
 #include "vslam/vo_motion_estimator.h"
+#include "vslam/utils.h"
 #include <gtsam/geometry/PinholeCamera.h>
 
 namespace vo {
@@ -48,10 +49,6 @@ ceres::CostFunction* ReprojectionError::Create(const gtsam::Point2& uv_left, con
       new ReprojectionError(uv_left, uv_right, K, pt3d_caml, pt3d_camr, pose_caml_camr));
 }
 
-bool ReprojectionError::UvInImage(const int width, const int height, const gtsam::Point2& uv) {
-  return (uv.x() >= 0 && uv.x() < width && uv.y() >= 0 && uv.y() < height);
-}
-
 MotionEstimator::MotionEstimator(const int width, const int height, const bool verbose)
   : width_(width), height_(height) {
   // Set solver options.
@@ -81,8 +78,8 @@ bool MotionEstimator::solve(const std::vector<Measurement>& measurements,
   ceres::Problem problem;
   for (const auto& meas : measurements) {
     // Filter out measurements outside image.
-    if (!ReprojectionError::UvInImage(width_, height_, meas.uv_left) ||
-        !ReprojectionError::UvInImage(width_, height_, meas.uv_right)) {
+    if (!utils::UvInImage(width_, height_, meas.uv_left) ||
+        !utils::UvInImage(width_, height_, meas.uv_right)) {
       continue;
     }
     auto cost_functor = ReprojectionError::Create(meas.uv_left, meas.uv_right, pts3d_caml.at(meas.pt3d_idx),

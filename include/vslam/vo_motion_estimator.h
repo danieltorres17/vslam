@@ -38,17 +38,6 @@ public:
                                      const gtsam::Point3& pt3d_caml, const gtsam::Point3& pt3d_camr,
                                      const gtsam::Cal3_S2& K, const gtsam::Pose3& pose_caml_camr);
 
-  /**
-   * @brief Return true if uv is within image dimensions. Return false otherwise.
-   *
-   * @param width image width [px].
-   * @param height image height [px].
-   * @param uv pixel measurement.
-   * @return true
-   * @return false
-   */
-  static bool UvInImage(const int width, const int height, const gtsam::Point2& uv);
-
 private:
   const gtsam::Point2 uv_left_;
   const gtsam::Point2 uv_right_;
