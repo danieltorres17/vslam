@@ -22,4 +22,10 @@ include_directories(
 add_library(vo_motion_estimator src/vo_motion_estimator.cpp)
 target_link_libraries(vo_motion_estimator gtsam ${CERES_LIBRARIES})
 
+add_library(stereo_vo src/stereo_vo.cpp)
+target_link_libraries(stereo_vo gtsam ${CERES_LIBRARIES} vo_motion_estimator)
+
+add_library(stereo_traj_generator src/stereo_traj_generator.cpp)
+target_link_libraries(stereo_traj_generator gtsam)
+
 add_subdirectory(test)
